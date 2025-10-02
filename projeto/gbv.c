@@ -112,9 +112,7 @@ int lib_create(Library *lib, const char *filename) {
     exit(1) ;
   }
 
-  printf("passou\n") ;
   fclose(f) ;
-
   return 0 ;
 }
 
