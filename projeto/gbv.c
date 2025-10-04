@@ -8,7 +8,7 @@
 
 #include "gbv.h" 
 
-extern const char *library_ext ;
+const char *library_ext = NULL ;
 
 /*move o arc criando um espaço de data_size bytes na posicao pos*/
 int lib_move(const char* arc_name, long pos, long data_size) {
@@ -67,8 +67,13 @@ int lib_move(const char* arc_name, long pos, long data_size) {
     bytes_left -= read;
   }
 
-  if (arc_size + data_size < arc_size) {
+  /*if (arc_size + data_size < arc_size) {
     truncate(arc_name, arc_size + data_size) ;
+  }*/
+  if (arc_size + data_size < arc_size) {
+    fflush(arc);
+    int fd = fileno(arc);
+    ftruncate(fd, arc_size + data_size);
   }
 
   fclose(arc);
@@ -325,6 +330,7 @@ int gbv_remove(Library *lib, const char *docname){
 
   int i, j ;
   long data_size, dir_pos ;
+  Document *tmp ;
 
   if (!lib || !docname) {
     perror("erro gbv_remove\n");
@@ -349,7 +355,7 @@ int gbv_remove(Library *lib, const char *docname){
 
   /*remove o conteudo*/
   data_size = lib->docs[i].size ;
-  lib_move(arc, lib->docs[i].offset + data_size, -data_size) ;
+  lib_move(library_ext, lib->docs[i].offset, -data_size) ;
 
   /*corrije os offsets e os index dos posteriores*/
   for (j = i +1; j < lib->count; j++) {
@@ -357,21 +363,32 @@ int gbv_remove(Library *lib, const char *docname){
     lib->docs[j-1] = lib->docs[j] ;
   }
 
+  lib->count-- ;
+  tmp = realloc(lib->docs, lib->count * sizeof(Document));
+  if (lib->count > 0 && !tmp) {
+    perror("erro realloc");
+    fclose(arc) ; 
+    return -1 ; 
+  }
+  lib->docs = tmp; 
+
   /*remove o espaco no diretorio*/
   /*calcula a posicao final do metadado*/
-  dir_pos = (i +1) * sizeof(Document) ;
-  dir_pos += 8 ;
-  lib_move(arc, dir_pos, -sizeof(Document)) ;
+  dir_pos = 8 + i * sizeof(Document) ;
+  lib_move(library_ext, dir_pos, -sizeof(Document)) ;
 
   /*atualiza todos os offsets nos metadados*/
   /*escreve na lib ARRUMAR*/
   for (j = 0; j < lib->count; j++) {
 
-    lib->docs[i].offset += data_size;
-    fseek(arc, 8 + i * sizeof(Document), SEEK_SET);
-    fwrite(&lib->docs[i], sizeof(Document), 1, arc);
+    fseek(arc, 8 + j * sizeof(Document), SEEK_SET);
+    fwrite(&lib->docs[j], sizeof(Document), 1, arc);
   }
 
+  fseek(arc, 4, SEEK_SET) ;
+  fwrite(&lib->count, sizeof(int), 1, arc) ;
+
+  fclose(arc) ;
   return 0;
 } 
 
@@ -393,11 +410,10 @@ int gbv_list(const Library *lib) {
   }
   printf("\n") ;
 
-  free(lib) ;
   return 0;
 } 
 
-/*arrumar */
+/*arrumar para trabalhar na biblioteca*/
 int gbv_view(const Library *lib, const char *docname) {
 
   int i, j, n_buf, n_buf_prev ;
@@ -408,7 +424,7 @@ int gbv_view(const Library *lib, const char *docname) {
     perror("erro gbv_view\n");
     exit(1);
   }
-  FILE *doc = fopen(docname, "rb");
+  FILE *doc = fopen(library_ext, "rb");
   if (!doc) {
     perror("erro na abertura do arquivo\n");
     exit(1);
@@ -475,7 +491,7 @@ int gbv_view(const Library *lib, const char *docname) {
 
   }while(command != 'q') ;
 
-  free(lib) ;
+  fclose(doc) ;
   return 0;
 } 
 
