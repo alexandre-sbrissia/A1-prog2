@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "gbv.h" 
+#include "gbv.h"
 
 const char *library_ext = NULL ;
 
@@ -67,62 +67,13 @@ int lib_move(const char* arc_name, long pos, long data_size) {
     bytes_left -= read;
   }
 
-  /*if (arc_size + data_size < arc_size) {
-    truncate(arc_name, arc_size + data_size) ;
-  }*/
-  if (arc_size + data_size < arc_size) {
-    fflush(arc);
-    int fd = fileno(arc);
-    ftruncate(fd, arc_size + data_size);
+  if (data_size < 0) {
+    fflush(arc) ;
+    int fd = fileno(arc) ;
+    ftruncate(fd, arc_size + data_size) ;
   }
 
   fclose(arc);
-  return 0;
-}
-
-/*escreve o arquivo f dentro do arquivo arc*/
-/*funçao sem checagem de sobreescrita ou atualizacao de offset*/
-int lib_write(const char *arc_name, long pos, const char *f_name) {
-
-  FILE *arc = fopen(arc_name, "rb+");
-  FILE *f = fopen(f_name, "rb") ;
-  if (arc == NULL || f == NULL) {
-    printf("Erro ao abrir o arquivo.\n");
-    return -1;
-  }
-
-  // obter tamanho dos arquivos
-  fseek(arc, 0, SEEK_END);
-  long arc_size = ftell(arc);
-
-  fseek(f, 0, SEEK_END);
-  long f_size = ftell(f);
-
-  if (pos < 0 || pos > arc_size) {
-    printf("Posição inválida.\n");
-    fclose(arc);
-    fclose(f);
-    return -1;
-  }
-
-  if (f_size == 0) {
-    fclose(arc);
-    fclose(f);
-    return 0;
-  }
-
-  // escrever conteudo 
-  unsigned char buf[BUFFER_SIZE];
-  int n_buf ;
-
-  fseek(arc, pos, SEEK_SET) ;
-
-  while ((n_buf = fread(buf, 1, BUFFER_SIZE, f)) > 0) {
-    fwrite(buf, 1, n_buf, arc);
-  }
-
-  fclose(arc);
-  fclose(f);
   return 0;
 }
 
@@ -167,6 +118,80 @@ int lib_create(Library *lib, const char *filename) {
 
   fclose(f) ;
   return 0 ;
+}
+
+/*return um vetor ordenado com o criterio */
+/*que precisa ser liberado depois*/
+Document *doc_sort(Library *lib, const char *criteria) {
+
+  int i, j ;
+  Document tmp, *aux ;
+
+  if (!lib || !criteria) {
+
+    perror("erro doc_sort\n") ;
+    return NULL ;
+  }
+  if (strcmp(criteria,"nome") != 0 && strcmp(criteria,"data") != 0
+      && strcmp(criteria,"tamanho") != 0) {
+    perror("criterio invalido \n") ;
+    return NULL ;
+  }
+  
+  /*copiando o vetor*/
+  aux = malloc(sizeof(Document) * lib->count) ;  
+  if (!aux) {
+    perror("erro de alocacao doc_sort\n") ;
+    exit(1) ;
+  }
+
+  for (i = 0; i < lib->count; i++){
+
+    aux[i] = lib->docs[i] ; 
+  }
+
+  if (strcmp(criteria,"nome") == 0)  {
+
+    //selection sort
+    for (i = 0; i < lib->count -1; i++) {
+      for (j = 0; j < lib->count; j++) {
+        
+        if (strcmp(aux[i].name, aux[j].name) > 0){
+          tmp = aux[i] ;
+          aux[i] = aux[j] ;
+          aux[j] = tmp ;
+        }
+      }
+    }
+  }
+  else if (strcmp(criteria,"data") == 0) {
+
+    for (i = 0; i < lib->count -1; i++) {
+      for (j = 0; j < lib->count; j++) {
+        
+        if (aux[i].date > aux[j].date){
+          tmp = aux[i] ;
+          aux[i] = aux[j] ;
+          aux[j] = tmp ;
+        }
+      }
+    }
+  }
+  else if (strcmp(criteria,"tamanho") == 0) {
+
+    for (i = 0; i < lib->count -1; i++) {
+      for (j = 0; j < lib->count; j++) {
+        
+        if (aux[i].size > aux[j].size){
+          tmp = aux[i] ;
+          aux[i] = aux[j] ;
+          aux[j] = tmp ;
+        }
+      }
+    }
+  }
+
+  return aux ;
 }
 
 /*cria a biblioteca*/
@@ -355,7 +380,7 @@ int gbv_remove(Library *lib, const char *docname){
 
   /*remove o conteudo*/
   data_size = lib->docs[i].size ;
-  lib_move(library_ext, lib->docs[i].offset, -data_size) ;
+  lib_move(library_ext, lib->docs[i].offset + data_size, -data_size) ;
 
   /*corrije os offsets e os index dos posteriores*/
   for (j = i +1; j < lib->count; j++) {
@@ -364,13 +389,13 @@ int gbv_remove(Library *lib, const char *docname){
   }
 
   lib->count-- ;
-  tmp = realloc(lib->docs, lib->count * sizeof(Document));
+  tmp = realloc(lib->docs, lib->count * sizeof(Document)) ;
   if (lib->count > 0 && !tmp) {
-    perror("erro realloc");
-    fclose(arc) ; 
-    return -1 ; 
+    perror("erro realloc") ;
+    fclose(arc) ;
+    return -1 ;
   }
-  lib->docs = tmp; 
+  lib->docs = tmp ;
 
   /*remove o espaco no diretorio*/
   /*calcula a posicao final do metadado*/
@@ -381,8 +406,8 @@ int gbv_remove(Library *lib, const char *docname){
   /*escreve na lib ARRUMAR*/
   for (j = 0; j < lib->count; j++) {
 
-    fseek(arc, 8 + j * sizeof(Document), SEEK_SET);
-    fwrite(&lib->docs[j], sizeof(Document), 1, arc);
+    fseek(arc, 8 + i * sizeof(Document), SEEK_SET);
+    fwrite(&lib->docs[i], sizeof(Document), 1, arc);
   }
 
   fseek(arc, 4, SEEK_SET) ;
@@ -413,14 +438,13 @@ int gbv_list(const Library *lib) {
   return 0;
 } 
 
-/*arrumar para trabalhar na biblioteca*/
 int gbv_view(const Library *lib, const char *docname) {
 
-  int i, j, n_buf, n_buf_prev ;
-  long pos ;
+  int i ;
+  long j, pos, data_size, data_offset, to_read, read ;
   char command, buf[BUFFER_SIZE] ;
 
-  if (!lib || !docname) {
+  if (!lib || !docname || !library_ext) {
     perror("erro gbv_view\n");
     exit(1);
   }
@@ -441,61 +465,148 @@ int gbv_view(const Library *lib, const char *docname) {
     return -1 ;
   } 
 
-  n_buf = 0 ;
-  n_buf_prev = 0 ;
+  data_size = lib->docs[i].size ;
+  data_offset = lib->docs[i].offset ;
+  pos = 0 ; 
+
   do {
-    
-    pos = ftell(doc) ;
+      // posiciona no bloco atual
+    fseek(doc, data_offset + pos, SEEK_SET) ;
+    to_read = (data_size - pos > BUFFER_SIZE) ? BUFFER_SIZE : (data_size - pos) ;
+    read = fread(buf, 1, to_read, doc) ;
 
-    scanf("%c", &command) ;
-    //printf("\ncommand: %c\n", command) ;
-    switch (command)
-    {
-      case 'n':
+    printf("\n--- Bloco %ld/%ld ---\n", pos / BUFFER_SIZE + 1, (data_size + BUFFER_SIZE - 1) / BUFFER_SIZE) ;
+    for (j = 0; j < read; j++)
+      putchar(buf[j]) ;
+    printf("\n") ;
 
-        if (pos >= lib->docs[i].size) {
-          fseek(doc, 0, SEEK_SET) ; 
-          //printf("\naqui n\n") ;
-        }
-        
-        n_buf_prev = n_buf ;
-        n_buf = fread(buf, 1, BUFFER_SIZE, doc) ;
-        printf("\n") ;
-        for (j = 0; j < n_buf-1; j++) 
-          printf("%c", buf[j]) ;
-        printf("\n") ;
+    if (pos + read >= data_size)
+      printf("[Fim do documento]\n") ;
+    if (pos == 0)
+      printf("[Início do documento]\n") ;
 
-        break ;
-      case 'p':
+    printf("Comando (n=próximo, p=anterior, q=sair): ") ;
+    scanf(" %c", &command) ;
 
-        if (pos == n_buf) {
-          fseek(doc, 0, SEEK_SET) ;  
-          //printf("\naqui p\n") ;
-        }
-        else { 
-          fseek(doc, pos - n_buf -n_buf_prev, SEEK_SET) ; 
-        }
-        
-        n_buf_prev = n_buf ;
-        n_buf = fread(buf, 1, BUFFER_SIZE, doc) ;
-        printf("\n") ;
-        for (j = 0; j < n_buf-1; j++) 
-          printf("%c", buf[j]) ;
-        printf("\n") ;
-
-      break;  
-      
-      default:
-        break;
+    if (command == 'n') {
+      if (pos + read < data_size)
+        pos += read ;
+      else
+        printf("Já está no fim do documento.\n") ; 
+    } 
+    if (command == 'p') {
+      if (pos == 0)
+        printf("Já está no início do documento.\n") ;
+      else {
+        pos -= BUFFER_SIZE ;
+        if (pos < 0) pos = 0 ;
+      }
     }
+    if (command != 'p' && command != 'n' && command != 'q') {
+      fclose(doc) ;
+      printf("Comando inválido, saindo\n") ;
+      return -1 ;
+    } 
 
-  }while(command != 'q') ;
+  } while (command != 'q') ;
 
   fclose(doc) ;
-  return 0;
+  return 0 ;
 } 
 
 int gbv_order(Library *lib, const char *archive, const char *criteria) {
 
-  return 0;
+  Document *aux ;
+  FILE *arc, *tmp_arc ;
+  char buf[BUFFER_SIZE], *tmp_arc_name;
+  int i, j, id ;
+  long new_offset, left, n_buf ;
+   
+  if (!lib || !archive || !criteria) {
+    perror("erro gbv_order\n");
+    exit(1) ;
+  }
+
+  aux = doc_sort(lib, criteria) ; 
+  if(!aux) {
+    return -1 ;
+  }
+
+  arc = fopen(archive, "rb");
+  if (!arc) {
+    perror("erro na abertura do arquivo\n");
+    free(aux) ;
+    exit(1) ;
+  }
+
+  tmp_arc_name = "tmp_arc" ; 
+  tmp_arc = fopen(tmp_arc_name, "wb+");
+  if (!tmp_arc) {
+    perror("erro ao criar arquivo temporiario\n");
+    fclose(arc) ;
+    free(aux) ;
+    exit(1) ;
+  }
+  
+
+  /*escreve a assinatura e o count */
+  fwrite("gbva", 4, 1, tmp_arc) ;
+  fwrite(&lib->count, 1, sizeof(int), tmp_arc) ;
+
+  /*escreve apenas para ocupar o espaco correto*/
+  for (i = 0; i < lib->count; i++)
+    fwrite(&lib->docs[i], sizeof(Document), 1, tmp_arc) ;
+  
+  /*formula um novo arquivo escrevendo ordenadamente*/
+  for (i = 0; i < lib->count; i++) {
+
+    /*acha o id antigo do doc para pegar o conteudo na lib*/
+    id = -1 ;
+    for (j = 0; j < lib->count; j++) {
+
+      if (strcmp(aux[i].name, lib->docs[j].name) == 0) {
+
+        id = j ;
+        break ;
+      }
+    }
+    if (id < 0) {
+
+      perror("erro gbv_order\n") ;
+      exit(1) ;
+    }
+
+    new_offset = ftell(tmp_arc) ;
+    aux[i].offset = new_offset ;
+
+    fseek(arc, lib->docs[id].offset, SEEK_SET) ;
+    left = aux[i].size ;
+
+    /*calcula quanto falta para escrever*/
+    /*caso seja maior que o tamanho do buf pega o restante*/
+    while (left > 0) {
+
+      n_buf = (left > BUFFER_SIZE) ? BUFFER_SIZE : left ;
+      fread(buf, 1, n_buf, arc) ;
+      fwrite(buf, 1, n_buf, tmp_arc) ;
+      left -= n_buf ;
+    }
+  }
+
+  /*reescreve o diretorio no novo archive*/
+  fseek(tmp_arc, 8, SEEK_SET) ;
+  for (i = 0; i < lib->count; i++)
+    fwrite(&aux[i], sizeof(Document), 1, tmp_arc) ;
+
+  fclose(arc) ;
+  fclose(tmp_arc) ;
+
+  remove(archive) ;
+  rename(tmp_arc_name, archive) ;
+
+  for (i = 0; i < lib->count; i++)
+    lib->docs[i] = aux[i] ;
+
+  free(aux) ;
+  return 0 ;
 } 
