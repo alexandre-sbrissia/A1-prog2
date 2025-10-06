@@ -15,56 +15,57 @@ int lib_move(const char* arc_name, long pos, long data_size) {
 
   FILE* arc = fopen(arc_name, "rb+");
   if (arc == NULL) {
-    printf("Erro ao abrir o arquivo.\n");
-    return -1;
+    printf("Erro ao abrir o arquivo.\n") ;
+    return -1 ;
   }
 
   // Obter tamanho do arquivo
-  fseek(arc, 0, SEEK_END);
-  long arc_size = ftell(arc);
+  fseek(arc, 0, SEEK_END) ;
+  long arc_size = ftell(arc) ;
   
   if (pos < 0 || pos > arc_size) {
-    printf("Posição inválida.\n");
+    printf("Posição inválida.\n") ;
     fclose(arc);
-    return -1;
+    return -1 ;
   }
 
   if (data_size == 0) {
     fclose(arc);
-    return 0;
+    return 0 ;
   }
 
   // Expandir o arquivo
   fseek(arc, 0, SEEK_END);
   for (long i = 0; i < data_size; i++) {
-    fputc(0, arc);
+    fputc(0, arc) ;
   }
 
   // Deslocar dados do final para posiçao 
-  unsigned char buffer[BUFFER_SIZE];
-  long bytes_left = arc_size - pos;
-  long offset_orig, offset_dest;
+  unsigned char buffer[BUFFER_SIZE] ;
+  long bytes_left = arc_size - pos ;
+  long offset_orig, offset_dest ;
   long bloco_size, read ;
   
   while (bytes_left > 0) {
     // Calcular tamanho do próximo bloco a mover
-    bloco_size = (bytes_left > BUFFER_SIZE) ? BUFFER_SIZE : bytes_left;
+    bloco_size = (bytes_left > BUFFER_SIZE) ? BUFFER_SIZE : bytes_left ;
     
     // Calcular offsets
-    offset_orig = pos + bytes_left - bloco_size;
-    offset_dest = offset_orig + data_size;
+    offset_orig = pos + bytes_left - bloco_size ;
+    offset_dest = offset_orig + data_size ;
     
     // Ler bloco
-    fseek(arc, offset_orig, SEEK_SET);
-    read = fread(buffer, 1, bloco_size, arc);
+    fseek(arc, offset_orig, SEEK_SET) ;
+    memset(buffer, 0, BUFFER_SIZE) ;
+    read = fread(buffer, 1, bloco_size, arc) ;
     
-    if (read == 0) break;
+    if (read == 0) break ;
     
     // Escrever bloco
-    fseek(arc, offset_dest, SEEK_SET);
-    fwrite(buffer, 1, read, arc);
+    fseek(arc, offset_dest, SEEK_SET) ;
+    fwrite(buffer, 1, read, arc) ; 
     
-    bytes_left -= read;
+    bytes_left -= read ;
   }
 
   if (data_size < 0) {
@@ -73,8 +74,8 @@ int lib_move(const char* arc_name, long pos, long data_size) {
     ftruncate(fd, arc_size + data_size) ;
   }
 
-  fclose(arc);
-  return 0;
+  fclose(arc) ;
+  return 0 ;
 }
 
 /*cria uma Library nova*/
@@ -82,7 +83,6 @@ int lib_create(Library *lib, const char *filename) {
 
   FILE *f ;
   struct stat data ;
-  char sig[5] ;
 
   if (!lib) {
     perror("erro lib_create\n") ;
@@ -105,15 +105,6 @@ int lib_create(Library *lib, const char *filename) {
     lib->docs = NULL ;
     lib->count = 0 ;
     fwrite(&lib->count, 1, sizeof(int), f) ;  
-  }
-
-  //testa se é um gbv
-  fseek(f, 0, SEEK_SET) ;
-  fread (sig, 1, 4, f) ;
-
-  if (strcmp(sig, "gbva") != 0) {
-    perror("arquivo não é uma biblioteca lib create\n") ;
-    exit(1) ;
   }
 
   fclose(f) ;
@@ -266,91 +257,100 @@ int gbv_open(Library *lib, const char *filename) {
 /*falta manipular caso de arquivo de mesmo nome*/
 int gbv_add(Library *lib, const char *archive, const char *docname) {
 
-  FILE *farc, *fdoc;
-  Document doc;
-  struct stat data;
-  char buf[BUFFER_SIZE];
-  size_t n_buf;
+  FILE *farc, *fdoc ;
+  Document doc ;
+  struct stat data ;
+  char buf[BUFFER_SIZE] ;
   int new_count ; 
-  long dir_pos ;
+  long dir_pos, left, n_buf, n_read ;
 
   if (!lib || !archive || !docname) {
-    perror("erro gbv_add\n");
+    perror("erro gbv_add\n") ;
     exit(1);
   }
-
   // Verifica duplicidade
   for (int i = 0; i < lib->count; i++) {
     if (strcmp(lib->docs[i].name, docname) == 0) {
-      printf("Documento já existe na biblioteca.\n");
-      return -1;
+      
+      gbv_remove(lib, docname) ;
+      break ;
     }
   }
 
-  farc = fopen(archive, "rb+");
-  fdoc = fopen(docname, "rb");
+  farc = fopen(archive, "rb+") ;
+  fdoc = fopen(docname, "rb") ;
   if (!farc || !fdoc) {
-    perror("erro na abertura do arquivo\n");
+    perror("erro na abertura do arquivo\n") ;
     exit(1);
   }
 
   // Preenche a estrutura do documento
-  stat(docname, &data);
-  strncpy(doc.name, docname, MAX_NAME -1);
-  doc.name[MAX_NAME - 1] = '\0';
-  doc.date = time(NULL);
-  fseek(fdoc, 0, SEEK_END);
-  doc.size = ftell(fdoc);
-  fseek(fdoc, 0, SEEK_SET);
+  stat(docname, &data) ; 
+  strncpy(doc.name, docname, MAX_NAME -1) ;
+  doc.name[MAX_NAME - 1] = '\0' ;
+  doc.date = time(NULL) ;
+  fseek(fdoc, 0, SEEK_END) ;
+  doc.size = ftell(fdoc) ;
+  fseek(fdoc, 0, SEEK_SET) ;
 
   // move e insere a estrutura Document no diretório
-  dir_pos = 8 + lib->count * sizeof(Document); // 4 bytes sig + 4 bytes count
-  lib_move(archive, dir_pos, sizeof(Document));
-  fseek(farc, dir_pos, SEEK_SET);
-  fwrite(&doc, 1, sizeof(Document), farc);
+  dir_pos = 8 + lib->count * sizeof(Document) ; // 4 bytes sig + 4 bytes count
+  lib_move(archive, dir_pos, sizeof(Document)) ;
+  fseek(farc, dir_pos, SEEK_SET) ;
+  fwrite(&doc, 1, sizeof(Document), farc) ;
 
   // Escreve o conteúdo do documento no final do arquivo da biblioteca
-  fseek(farc, 0, SEEK_END);
-  doc.offset = ftell(farc);
+  fseek(farc, 0, SEEK_END) ;
+  doc.offset = ftell(farc) ;
 
-  while ((n_buf = fread(buf, 1, BUFFER_SIZE, fdoc)) > 0) {
-    fwrite(buf, 1, n_buf, farc);
+  /*calcula quanto falta para escrever*/
+  /*caso seja maior que o tamanho do buf pega o restante*/
+  left = doc.size ;
+  while (left > 0) {
+
+    memset(buf, 0, BUFFER_SIZE) ;  
+    n_buf = (left > BUFFER_SIZE) ? BUFFER_SIZE : left ;
+    n_read = fread(buf, 1, n_buf, fdoc) ;
+    if (n_read == 0) break ;
+
+    fwrite(buf, 1, n_buf, farc) ;
+    left -= n_buf ;
   }
-  fclose(fdoc);
+  fclose(fdoc) ;
 
   // atualiza os demais offsets
   for (int i = 0; i < lib->count; i++) {
 
-    lib->docs[i].offset += sizeof(Document);
-    fseek(farc, 8 + i * sizeof(Document), SEEK_SET);
-    fwrite(&lib->docs[i], sizeof(Document), 1, farc);
+    lib->docs[i].offset += sizeof(Document) ;
+    fseek(farc, 8 + i * sizeof(Document), SEEK_SET) ;
+    fwrite(&lib->docs[i], sizeof(Document), 1, farc) ;
   }
 
   // Corrijir o offset do novo Document 
-  fseek(farc, dir_pos, SEEK_SET);
-  fwrite(&doc, sizeof(Document), 1, farc);
+  fseek(farc, dir_pos, SEEK_SET) ;
+  fwrite(&doc, sizeof(Document), 1, farc) ;
 
   // Atualiza o contador de documentos no cabeçalho
-  new_count = lib->count + 1;
-  fseek(farc, 4, SEEK_SET); // 4 bytes após a assinatura
-  fwrite(&new_count, sizeof(int), 1, farc);
+  new_count = lib->count + 1 ;
+  fseek(farc, 4, SEEK_SET) ; // 4 bytes após a assinatura
+  fwrite(&new_count, sizeof(int), 1, farc) ;
 
-  fclose(farc);
+  fclose(farc) ;
 
   // Atualiza o diretório em memória
   Document *tmp = realloc(lib->docs, new_count * sizeof(Document));
   if (!tmp) {
-    perror("erro realloc");
-    return -1;
+    perror("erro realloc\n") ;
+    free(lib->docs) ;
+    return -1 ;
   }
-  lib->docs = tmp;
-  lib->docs[lib->count] = doc;
-  lib->count = new_count;
+  lib->docs = tmp ;
+  lib->docs[lib->count] = doc ;
+  lib->count = new_count ;
 
-  return 0;
+  return 0 ;
 }
 
-/* o documento*/
 int gbv_remove(Library *lib, const char *docname){
 
   int i, j ;
@@ -472,6 +472,7 @@ int gbv_view(const Library *lib, const char *docname) {
   do {
       // posiciona no bloco atual
     fseek(doc, data_offset + pos, SEEK_SET) ;
+    memset(buf, 0, BUFFER_SIZE) ;
     to_read = (data_size - pos > BUFFER_SIZE) ? BUFFER_SIZE : (data_size - pos) ;
     read = fread(buf, 1, to_read, doc) ;
 
@@ -547,7 +548,6 @@ int gbv_order(Library *lib, const char *archive, const char *criteria) {
     free(aux) ;
     exit(1) ;
   }
-  
 
   /*escreve a assinatura e o count */
   fwrite("gbva", 4, 1, tmp_arc) ;
@@ -586,6 +586,7 @@ int gbv_order(Library *lib, const char *archive, const char *criteria) {
     /*caso seja maior que o tamanho do buf pega o restante*/
     while (left > 0) {
 
+      memset(buf, 0, BUFFER_SIZE) ;
       n_buf = (left > BUFFER_SIZE) ? BUFFER_SIZE : left ;
       fread(buf, 1, n_buf, arc) ;
       fwrite(buf, 1, n_buf, tmp_arc) ;
