@@ -17,7 +17,6 @@ int lib_destroy(Library *lib) {
     return 0 ;
 
   free(lib->docs) ;
-  free(lib) ;
 
   return 0 ;
 }
@@ -353,13 +352,11 @@ int gbv_add(Library *lib, const char *archive, const char *docname) {
   fclose(farc) ;
 
   // Atualiza o diretório em memória
-  Document *tmp = realloc(lib->docs, new_count * sizeof(Document));
-  if (!tmp) {
+  lib->docs = realloc(lib->docs, new_count * sizeof(Document));
+  if (!lib->docs) {
     perror("erro realloc\n") ;
-    free(lib->docs) ;
     return -1 ;
   }
-  lib->docs = tmp ;
   lib->docs[lib->count] = doc ;
   lib->count = new_count ;
 
@@ -408,7 +405,6 @@ int gbv_remove(Library *lib, const char *docname){
     tmp = realloc(lib->docs, lib->count * sizeof(Document)) ;
   else {
     
-    free(lib->docs) ;
     lib->docs = NULL ;
     tmp = NULL ;
   }
