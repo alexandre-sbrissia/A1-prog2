@@ -87,7 +87,8 @@ int lib_move(const char* arc_name, long pos, long data_size) {
   if (data_size < 0) {
     fflush(arc) ;
     fd = fileno(arc) ;
-    ftruncate(fd, arc_size + data_size) ;
+    if(ftruncate(fd, arc_size + data_size) == -1)
+      perror("erro truncate\n") ;
   }
 
   fclose(arc) ;

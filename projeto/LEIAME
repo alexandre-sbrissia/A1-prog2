@@ -1,0 +1,26 @@
+Autor:
+    Alexandre José Sbrissia GRR20251758
+
+Arquivos: 
+    gbv.c 
+    gbv.h 
+    Makefile 
+    lib.c 
+    lib.h 
+    main.c 
+
+Dificuldades enfrentadas:
+
+    A maior dificuldade enfrentada foi no final do projeto, onde 
+a checagem do valgrind acusava acesso a variáveis não inicializadas na função
+add. Para resolver isso eu apenas troquei a ordem de execução para primeiro
+mover pela função lib_move e depois abrir o arquivo para corrigir os metadados
+escritos na biblioteca.
+    Outra dificuldade foi implementar o diretório no final do arquivo, por 
+isso eu optei por posicionar o diretório logo após o superbloco, no começo
+do arquivo.
+
+Bugs conhecidos: 
+
+    Em conteudos muito grandes, o truncamento nao funciona corretamente
+e a função remove sobreescreve conteúdo.

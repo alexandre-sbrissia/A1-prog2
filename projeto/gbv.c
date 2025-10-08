@@ -9,7 +9,6 @@
 #include "gbv.h"
 #include "lib.h"
 
-/*cria a biblioteca*/
 int gbv_create(const char *filename) {
 
   FILE *f ;
@@ -37,7 +36,6 @@ int gbv_create(const char *filename) {
   return 0 ;
 }
 
-/*cria a struct Library para as demais operacoes*/
 int gbv_open(Library *lib, const char *filename) {
 
   FILE *f ;
@@ -95,7 +93,6 @@ int gbv_open(Library *lib, const char *filename) {
   return 0 ;
 }
 
-/*falta manipular caso de arquivo de mesmo nome*/
 int gbv_add(Library *lib, const char *archive, const char *docname) {
 
   FILE *farc, *fdoc ;
@@ -161,7 +158,7 @@ int gbv_add(Library *lib, const char *archive, const char *docname) {
     n_read = fread(buf, 1, n_buf, fdoc) ;
     if (n_read == 0) break ;
 
-    fwrite(buf, 1, n_buf, farc) ;
+    fwrite(buf, 1, n_read, farc) ;
     left -= n_buf ;
   }
   fclose(fdoc) ;
@@ -202,14 +199,10 @@ int gbv_remove(Library *lib, const char *archive, const char *docname){
   int i, j ;
   long data_size, dir_pos ;
   Document *tmp ;
+  FILE *arc ;
 
   if (!lib || !docname) {
     perror("erro gbv_remove\n");
-    exit(1);
-  }
-  FILE *arc = fopen(archive, "rb+");
-  if (!arc) {
-    perror("erro na abertura do arquivo\n");
     exit(1);
   }
 
@@ -220,18 +213,31 @@ int gbv_remove(Library *lib, const char *archive, const char *docname){
   }
   if (i == lib->count ) {
     perror("documento nao encontrado\n") ;
-    fclose(arc) ;
     return -1 ;
   } 
 
-  /*remove o conteudo*/
   data_size = lib->docs[i].size ;
+
+  /*remove o espaco no diretorio*/
+  /*calcula a posicao final do metadado*/
+  /*e remove o conteudo*/
+  dir_pos = 8 + i * sizeof(Document) ;
   lib_move(archive, lib->docs[i].offset + data_size, -data_size) ;
+  lib_move(archive, dir_pos, -sizeof(Document)) ;
 
   /*corrije os offsets e os index dos posteriores*/
   for (j = i +1; j < lib->count; j++) {
     lib->docs[j].offset -= data_size ;
-    lib->docs[j-1] = lib->docs[j] ;
+  }
+
+  /*corrije todos os offsets*/
+  for (j = 0; j < lib->count; j++) {
+    lib->docs[j].offset -= sizeof(Document) ;
+  }
+
+  /*arruma o vetor de docs*/
+  for (j = i +1; j < lib->count; j++) {
+    lib->docs[j -1] = lib->docs[j] ;
   }
 
   lib->count-- ;
@@ -246,18 +252,19 @@ int gbv_remove(Library *lib, const char *archive, const char *docname){
 
   if (lib->count > 0 && !tmp) {
     perror("erro realloc") ;
-    fclose(arc) ;
     return -1 ;
   }
   lib->docs = tmp ;
 
-  /*remove o espaco no diretorio*/
-  /*calcula a posicao final do metadado*/
-  dir_pos = 8 + i * sizeof(Document) ;
-  lib_move(archive, dir_pos, -sizeof(Document)) ;
+  /*abre arquivo  para atualizar os metadados*/
+  arc = fopen(archive, "rb+");
+  if (!arc) {
+    perror("erro na abertura do arquivo\n");
+    exit(1);
+  }
 
   /*atualiza todos os offsets nos metadados*/
-  /*escreve na lib ARRUMAR*/
+  /*escreve na lib */
   for (j = 0; j < lib->count; j++) {
 
     fseek(arc, 8 + j * sizeof(Document), SEEK_SET);
@@ -331,7 +338,7 @@ int gbv_view(const Library *lib, const char *archive, const char *docname) {
     to_read = (data_size - pos > BUFFER_SIZE) ? BUFFER_SIZE : (data_size - pos) ;
     read = fread(buf, 1, to_read, doc) ;
 
-    printf("\n--- Bloco %ld/%ld ---\n", pos / BUFFER_SIZE + 1, (data_size + BUFFER_SIZE - 1) / BUFFER_SIZE) ;
+    printf("\n    Bloco %ld/%ld    \n", pos / BUFFER_SIZE + 1, (data_size + BUFFER_SIZE - 1) / BUFFER_SIZE) ;
     for (j = 0; j < read; j++)
       putchar(buf[j]) ;
     printf("\n") ;
@@ -341,19 +348,15 @@ int gbv_view(const Library *lib, const char *archive, const char *docname) {
     if (pos == 0)
       printf("[Início do documento]\n") ;
 
-    printf("Comando (n=próximo, p=anterior, q=sair): ") ;
+    printf("Comando:  ") ;
     scanf(" %c", &command) ;
 
     if (command == 'n') {
       if (pos + read < data_size)
         pos += read ;
-      else
-        printf("Já está no fim do documento.\n") ; 
     } 
     if (command == 'p') {
-      if (pos == 0)
-        printf("Já está no início do documento.\n") ;
-      else {
+      if(pos != 0) {
         pos -= BUFFER_SIZE ;
         if (pos < 0) pos = 0 ;
       }
